@@ -3,7 +3,7 @@ fmt/10.1.1
 spdlog/1.14.0
 boost/1.84.0
 gtest/1.14.0
-elfutils/0.189
+elfutils/0.189.20251212-083204@ci/stable
 
 [generators]
 CMakeDeps

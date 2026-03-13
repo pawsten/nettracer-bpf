@@ -34,6 +34,7 @@ else ()
 	include(conan.cmake)
 	conan_cmake_run(CONANFILE conanfile.txt
 			BASIC_SETUP CMAKE_TARGETS UPDATE NO_OUTPUT_DIRS
+			PROFILE default
 			BUILD missing
 	)
 endif ()

@@ -15,7 +15,7 @@ RUN apt-get update -y && \
 	apt-get install -y --fix-missing --no-install-recommends \
 		wget lsb-release gpg python3-pip git libelf-dev bash \
 		linux-headers-${KERNEL_VERSION} \
-		make gcc-11 g++-11 libstdc++-9-dev && \
+		make && \
 	wget --timeout=10 --tries=3 -O - https://apt.llvm.org/llvm.sh | bash -s - "${LLVM_VERSION}" && \
 	update-alternatives --install /usr/bin/cc cc "/usr/lib/llvm-${LLVM_VERSION}/bin/clang" 800 && \
 	update-alternatives --install /usr/bin/c++ c++ "/usr/lib/llvm-${LLVM_VERSION}/bin/clang++" 800 && \

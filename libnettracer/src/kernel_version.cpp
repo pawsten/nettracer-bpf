@@ -24,6 +24,11 @@
 #include <sys/utsname.h>
 #include <string.h>
 
+
+#define KERNEL_VERSION_FOR_CLASSIC KERNEL_VERSION(4, 15, 0)
+#define KERNEL_VERSION_FOR_BTF KERNEL_VERSION(5, 4, 0)
+
+
 namespace {
 
 utsname getUtsname(const ISystemCalls& sysCalls) {
@@ -97,7 +102,6 @@ std::optional<int> getKernelVersionFromUname(const utsname& info) {
 
 } // namespace
 
-namespace bpf {
 
 std::optional<int> getKernelVersion(const ISystemCalls& sysCalls) {
 	auto info{getUtsname(sysCalls)};
@@ -114,8 +118,16 @@ std::optional<int> getKernelVersion(const ISystemCalls& sysCalls) {
 	}
 }
 
-bool isKernelSupported(int kernelVersion) {
-	return kernelVersion >= KERNEL_VERSION(4, 15, 0);
+bool isKernelSupported(int kernelVersion, int minimalVersion) {
+	return kernelVersion >= minimalVersion;
+}
+
+bool isKernelSupportedForClassic(int kernelVersion) {
+	return isKernelSupported(kernelVersion, KERNEL_VERSION_FOR_CLASSIC);
+}
+
+bool isKernelSupportedForBTF(int kernelVersion) {
+	return isKernelSupported(kernelVersion, KERNEL_VERSION_FOR_BTF);
 }
 
 std::string kernelVersionToString(int kernelVersion) {
@@ -125,4 +137,3 @@ std::string kernelVersionToString(int kernelVersion) {
 	return std::to_string(major) + '.' + std::to_string(minor) + '.' + std::to_string(patch);
 }
 
-} // namespace bpf

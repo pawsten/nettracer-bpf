@@ -23,17 +23,18 @@ template <typename IPTYPE>
 void print_human_readable(const std::unordered_map<ServerTuple_t<IPTYPE>, ServerStats>& aggr, int field_width, std::ostream& os) {
 
 	for (auto& [tup, stats] : aggr) {
-
-		os << std::setw(field_width) << to_string(tup.get_tuple(), ConnectionDirection::Incoming);
-		os << std::setw(field_width) << tup.pid << std::setw(field_width) << stats.bytes_sent << std::setw(field_width)
-		   << stats.bytes_received << std::setw(field_width) << stats.rtt << std::setw(field_width) << stats.connection_attempts << "\n";
+		os << std::setw(ADDRESS_FIELD_WIDTH) << to_string(tup.get_tuple(), ConnectionDirection::Incoming);
+		os << std::setw(field_width) << tup.pid << std::setw(field_width) << short_num(stats.bytes_sent) << std::setw(field_width)
+		   << short_num(stats.bytes_received) << std::setw(field_width) << stats.rtt << std::setw(field_width) << stats.connection_attempts
+		   << std::setw(field_width) << stats.connection_timeouts << std::setw(field_width) << stats.connection_resets << "\n";
 	}
 }
 
 static void printHeader(int field_width, std::ostream& os) {
-	os << std::left << std::setw(2 * field_width) << "local address <-> remote address" << std::setw(field_width) << "pid"
+	os << std::left << std::setw(ADDRESS_FIELD_WIDTH) << "local address <-> remote address" << std::setw(field_width) << "pid"
 	   << std::setw(field_width) << "bytes sent" << std::setw(field_width) << "bytes received " << std::setw(field_width) << "rtt"
-	   << std::setw(field_width) << "rtt_var" << std::setw(field_width) << "connectivity" << "\n";
+	   << std::setw(field_width) << "conn_attempts" << std::setw(field_width) << "conn_timeouts"
+	   << std::setw(field_width) << "conn_resets" << "\n";
 }
 
 void ConnectivityStats::print_human_readable() {
@@ -42,6 +43,8 @@ void ConnectivityStats::print_human_readable() {
 	print_human_readable<ipv4_tuple_t>(servers_, field_width, *os);
 	print_human_readable<ipv6_tuple_t>(servers6_, field_width, *os);
 	print_human_readable_clients();
+    servers_.clear();
+	servers6_.clear();
 }
 
 template <typename IPTYPE>
@@ -64,46 +67,13 @@ void ConnectivityStats::aggregateServers() {
 
 template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
-	auto key{eventToTuple(evt)};
-	auto time = bpfTimeToSystemTime(evt.timestamp);
-
-	if (key.sport == 0) {
-		LOG_DEBUG("Event src port = 0 for {} ", to_string(evt));
-		return;
-	}
-
+	NetStat::event<IPTYPE>(evt);
+	auto key = createServerKey(eventToTuple(evt), evt.pid);
 	std::unique_lock<std::mutex> l(mx);
-	auto& el = connections<IPTYPE>()[key];
-
-	if (el.state.Closed == 1) {
-		LOG_INFO("Event on closed connection {}", to_string(evt));
-	}
-	el.pid = evt.pid;
-	el.update_time = getCurrentTimeFromSteadyClock();
-	if (evt.type == TCP_EVENT_TYPE_CONNECT) {
-		el.start = time;
-		el.state.Established = 1;
-		el.state.Direction = 0;
-
-		return;
-	}
-
-	key.dport = 0;
-	auto skey = createServerKey(key, evt.pid);
-	auto& serv = servers<IPTYPE>()[skey];
+	auto& serv = servers<IPTYPE>()[key];
 	serv.update_time = getCurrentTimeFromSteadyClock();
 
-	if (evt.type == TCP_EVENT_TYPE_ACCEPT) {
-		el.state.Direction = 1;
-		el.state.Established = 1;
-		el.start = time;
-		serv.session_counter++;
-
-	} else if (evt.type == TCP_EVENT_TYPE_CLOSE) {
-		el.state.Closed = 1;
-		el.end = time;
-		serv.session_counter--;
-	} else if (evt.type == TCP_EVENT_TYPE_SYN_ATTEMPT) {
+	if (evt.type == TCP_EVENT_TYPE_SYN_ATTEMPT) {
 		serv.connection_attempts++;
 	} else if (evt.type == TCP_EVENT_TYPE_RST) {
 		serv.connection_resets++;

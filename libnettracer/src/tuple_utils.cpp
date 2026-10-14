@@ -215,3 +215,12 @@ std::ostream& operator<<(std::ostream& os, const ipv6_tuple_t& tup) {
 	return os;
 }
 
+std::string short_num(uint32_t v) {
+	if (v < 1000)
+		return fmt::format("{}", v);
+	if (v < 1'000'000)
+		return fmt::format("{:.1f}K", v / 1e3);
+	if (v < 1'000'000'000)
+		return fmt::format("{:.1f}M", v / 1e6);
+	return fmt::format("{:.1f}G", v / 1e9);
+}

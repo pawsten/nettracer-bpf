@@ -23,10 +23,11 @@ struct server_ipv4_tuple_t {
 	uint32_t saddr;
 	uint32_t daddr;
 	uint16_t sport;
+	uint32_t netns;
 	uint32_t pid;
 	bool operator==(const server_ipv4_tuple_t&) const = default;
 	ipv4_tuple_t get_tuple() const {
-		return ipv4_tuple_t{saddr, daddr, sport, 0, 0};
+		return ipv4_tuple_t{saddr, daddr, sport, 0, netns};
 	}
 };
 
@@ -36,10 +37,11 @@ struct server_ipv6_tuple_t {
 	uint64_t daddr_h;
 	uint64_t daddr_l;
 	uint16_t sport;
+	uint32_t netns;
 	uint32_t pid;
 	bool operator==(const server_ipv6_tuple_t&) const = default;
 	ipv6_tuple_t get_tuple() const {
-		return ipv6_tuple_t{saddr_h, saddr_l, daddr_h, daddr_l, sport, 0, 0};
+		return ipv6_tuple_t{saddr_h, saddr_l, daddr_h, daddr_l, sport, 0, netns};
 	}
 };
 } // namespace netstat
@@ -73,7 +75,6 @@ struct std::hash<netstat::server_ipv6_tuple_t> {
 namespace netstat {
 struct ServerStats : public Stats {
 	std::chrono::steady_clock::time_point update_time;
-	uint32_t session_counter = 0;
 	uint32_t connection_attempts = 0;
 	uint32_t connection_resets = 0;
 	uint32_t connection_timeouts = 0;
@@ -92,10 +93,10 @@ struct ServerStats : public Stats {
 using ServersIPv4 = std::unordered_map<server_ipv4_tuple_t, ServerStats>;
 using ServersIPv6 = std::unordered_map<server_ipv6_tuple_t, ServerStats>;
 inline server_ipv4_tuple_t createServerKey(const ipv4_tuple_t& key, uint32_t pid) {
-	return server_ipv4_tuple_t{key.saddr, key.daddr, key.sport, pid};
+	return server_ipv4_tuple_t{key.saddr, key.daddr, key.sport, key.netns, pid};
 }
 inline server_ipv6_tuple_t createServerKey(const ipv6_tuple_t& key, uint32_t pid) {
-	return server_ipv6_tuple_t{key.saddr_h, key.saddr_l, key.daddr_h, key.daddr_l, key.sport, pid};
+	return server_ipv6_tuple_t{key.saddr_h, key.saddr_l, key.daddr_h, key.daddr_l, key.sport, key.netns, pid};
 }
 
 template <typename T>

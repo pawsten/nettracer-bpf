@@ -28,7 +28,6 @@ namespace netstat {
 
 constexpr auto INACTIVE_TIMEOUT = minutes(1);
 constexpr unsigned INTERVAL_DIVIDER = 10;
-constexpr int MIN_FIELD_WIDTH = 22;
 
 template <class IPTYPE>
 constexpr uint64_t addAvgHeaderSize(uint64_t pkts, bool count) {
@@ -368,9 +367,10 @@ void print_human_readable(const std::unordered_map<IPTYPE, Connection>& aggr, in
 			continue;
 		}
 
-		os << std::setw(field_width) << to_string(tup, dirconn);
-		os << std::setw(field_width) << stats.pid << std::setw(field_width) << stats.curr.bytes_sent << std::setw(field_width)
-		   << stats.curr.bytes_received << std::setw(field_width) << stats.curr.rtt << "\n";
+		os << std::setw(ADDRESS_FIELD_WIDTH) << to_string(tup, dirconn);
+		os << std::setw(field_width) << stats.pid << std::setw(field_width) << short_num(stats.curr.bytes_sent) << std::setw(field_width)
+		   << short_num(stats.curr.bytes_received) << std::setw(field_width) << stats.curr.rtt << std::setw(field_width) << stats.curr.rtt_var
+		   << "\n";
 	}
 }
 
@@ -456,13 +456,11 @@ NetStat::NetStat(config::ExitCtrl& e, bool deltaMode, bool headerMode, bool nonI
 		: exitCtrl(e), incremental(deltaMode), add_header_mode_(headerMode), os(&std::cout), filter_loopback(filterLoopback) {
 	interactive = ((isatty(STDIN_FILENO) == 1) && !nonInteractive);
 	if (interactive) {
-		//initscr();
 		int window_width = getWindowWidth();
 		field_width = window_width / 10;
-		if (field_width < MIN_FIELD_WIDTH) {
-			field_width = MIN_FIELD_WIDTH;
+		if (field_width < NUM_FIELD_WIDTH) {
+			field_width = NUM_FIELD_WIDTH;
 		}
-		std::cout << " fields width " << field_width;
 	}
 }
 

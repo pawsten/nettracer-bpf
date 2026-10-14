@@ -20,6 +20,9 @@
 
 namespace netstat {
 
+constexpr int ADDRESS_FIELD_WIDTH = 56;
+constexpr int NUM_FIELD_WIDTH = 10;
+
 class IStatsCollector {
 public:
 	virtual ~IStatsCollector() = default;

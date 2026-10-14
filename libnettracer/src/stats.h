@@ -27,4 +27,4 @@ struct Stats {
 	uint32_t rtt = 0;
 	uint32_t rtt_var = 0;
 };
-}
+} // namespace netstat

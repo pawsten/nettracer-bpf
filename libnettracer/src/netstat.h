@@ -3,7 +3,7 @@
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
-* You may obtain a copy of the License cat
+* You may obtain a copy of the License at
 *
 * https://www.apache.org/licenses/LICENSE-2.0
 *
@@ -15,8 +15,7 @@
 */
 #pragma once
 
-#include "bpf_generic/src/bpf_wrapper.h"
-#include "bpf_program/nettracer-bpf.h"
+#include "Istats_collector.h"
 #include "configuration.h"
 #include "tuple_utils.h"
 #include <chrono>
@@ -27,7 +26,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
-#include "connectivity_stats.h"
+#include "stats.h"
 
 namespace netstat {
 
@@ -55,10 +54,12 @@ using ConnectionsIPv6 = std::unordered_map<ipv6_tuple_t, Connection>;
 using IPv4ListenSock2Pid = std::unordered_multimap<ipv4_tuple_t, uint32_t>;
 using IPv6ListenSock2Pid = std::unordered_multimap<ipv6_tuple_t, uint32_t>;
 
-class NetStat {
+class NetStat : public IStatsCollector {
 protected:
 	ConnectionsIPv4 aggr_;
 	ConnectionsIPv6 aggr6_;
+	ServersIPv4 servers_;
+	ServersIPv6 servers6_;
 	IPv4ListenSock2Pid listen_;
 	IPv6ListenSock2Pid listen6_;
 	std::mutex mx;
@@ -78,6 +79,8 @@ protected:
 	inline auto& connections(); // no default instantiation
 	template <typename IPTYPE>
 	inline auto& listenPorts();
+	template <typename IPTYPE>
+	inline auto& servers();
 
 	template<typename IPTYPE>
 	void readListenPorts(const tcpTable<IPTYPE>&);
@@ -92,7 +95,7 @@ protected:
 
 	template<typename IPTYPE>
 	void print();
-	void print_human_readable();
+	virtual void print_human_readable();
 	void flush();
 	template <typename IPTYPE>
 	void clean();
@@ -105,19 +108,21 @@ protected:
 
 	template <typename IPTYPE>
 	void resolveOldConnections();
+	template <typename IPTYPE>
+	void aggregateServers();
+	template <typename IPTYPE, typename EventIPTYPE>
+	void event(const EventIPTYPE& evt);
 
 public:
 	explicit NetStat(config::ExitCtrl& e, bool deltaMode, bool headerMode, bool nonInteractive, bool filterLoopback = true);
 	virtual ~NetStat();
-	void set_kbhit();
-	void set_max_map_size(uint32_t size);
-	void on_config_change();
-	void init();
-
-	bool map_loop(const bpf::bpf_fds& fdsIPv4, const bpf::bpf_fds& fdsIPv6);
-
-	template<typename IPTYPE, typename EventIPTYPE>
-	void event(const EventIPTYPE& evt);
+	void set_kbhit() override;
+	void set_max_map_size(uint32_t size) override;
+	void on_config_change() override;
+	void init() override;
+	bool map_loop(const bpf::bpf_fds& fdsIPv4, const bpf::bpf_fds& fdsIPv6) override;
+	void eventIpv4(const tcp_ipv4_event_t& evt) override;
+	void eventIpv6(const tcp_ipv6_event_t& evt) override;
 };
 
 template<>
@@ -137,5 +142,21 @@ template<>
 inline auto& NetStat::listenPorts<ipv6_tuple_t>() {
 	return listen6_;
 }
+
+template <>
+inline auto& NetStat::servers<ipv4_tuple_t>() {
+	return servers_;
+}
+template <>
+inline auto& NetStat::servers<ipv6_tuple_t>() {
+	return servers6_;
+}
+
+class ConnectivityStats : public NetStat {
+public:
+	using NetStat::NetStat;
+protected:
+	void print_human_readable() override;
+};
 
 } // namespace netstat

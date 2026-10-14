@@ -14,26 +14,18 @@
  * limitations under the License.
  */
 #pragma once
+#include <chrono>
 #include <functional>
-#include "netstat.h"
+#include "stats.h"
 
 namespace netstat {
 
-struct Stats {
-	uint64_t bytes_sent = 0;
-	uint64_t bytes_received = 0;
-	uint64_t pkts_sent = 0;
-	uint64_t pkts_received = 0;
-	uint64_t pkts_retrans = 0;
-	uint32_t rtt = 0;
-	uint32_t rtt_var = 0;
-};
-
 struct ServerStats : public Stats {
+	std::chrono::steady_clock::time_point update_time;
 	uint32_t session_counter = 0;
 	uint32_t connection_attempts = 0;
 	uint32_t connection_resets = 0;
-	uint32_t connection_timeout = 0;
+	uint32_t connection_timeouts = 0;
 
 	void addStats(const Stats& conn) {
 		bytes_sent += conn.bytes_sent;
@@ -52,6 +44,9 @@ struct server_ipv4_tuple_t {
 	uint16_t sport;
 	uint32_t pid;
 	bool operator==(const server_ipv4_tuple_t&) const = default;
+	ipv4_tuple_t get_tuple() const {
+		return ipv4_tuple_t{saddr, daddr, sport, 0, 0};
+	}
 };
 
 struct server_ipv6_tuple_t {
@@ -62,10 +57,34 @@ struct server_ipv6_tuple_t {
 	uint16_t sport;
 	uint32_t pid;
 	bool operator==(const server_ipv6_tuple_t&) const = default;
+	ipv6_tuple_t get_tuple() const {
+		return ipv6_tuple_t{saddr_h, saddr_l, daddr_h, daddr_l, sport, 0, 0};
+	}
 };
 
 using ServersIPv4 = std::unordered_map<server_ipv4_tuple_t, ServerStats>;
 using ServersIPv6 = std::unordered_map<server_ipv6_tuple_t, ServerStats>;
+inline server_ipv4_tuple_t createServerKey(const ipv4_tuple_t& key, uint32_t pid) {
+	return server_ipv4_tuple_t{key.saddr, key.daddr, key.sport, pid};
+}
+inline server_ipv6_tuple_t createServerKey(const ipv6_tuple_t& key, uint32_t pid) {
+	return server_ipv6_tuple_t{key.saddr_h, key.saddr_l, key.daddr_h, key.daddr_l, key.sport, pid};
+}
+
+template <typename T>
+struct ServerTupleOf;
+template <>
+struct ServerTupleOf<ipv4_tuple_t> {
+	using type = server_ipv4_tuple_t;
+};
+template <>
+struct ServerTupleOf<ipv6_tuple_t> {
+	using type = server_ipv6_tuple_t;
+};
+
+template <typename T>
+using ServerTuple_t = typename ServerTupleOf<T>::type;
+
 }
 
 template <>

@@ -58,8 +58,6 @@ class NetStat : public IStatsCollector {
 protected:
 	ConnectionsIPv4 aggr_;
 	ConnectionsIPv6 aggr6_;
-	ServersIPv4 servers_;
-	ServersIPv6 servers6_;
 	IPv4ListenSock2Pid listen_;
 	IPv6ListenSock2Pid listen6_;
 	std::mutex mx;
@@ -79,8 +77,6 @@ protected:
 	inline auto& connections(); // no default instantiation
 	template <typename IPTYPE>
 	inline auto& listenPorts();
-	template <typename IPTYPE>
-	inline auto& servers();
 
 	template<typename IPTYPE>
 	void readListenPorts(const tcpTable<IPTYPE>&);
@@ -96,6 +92,7 @@ protected:
 	template<typename IPTYPE>
 	void print();
 	virtual void print_human_readable();
+	void print_human_readable_clients();
 	void flush();
 	template <typename IPTYPE>
 	void clean();
@@ -108,8 +105,7 @@ protected:
 
 	template <typename IPTYPE>
 	void resolveOldConnections();
-	template <typename IPTYPE>
-	void aggregateServers();
+	virtual void aggregateServers();
 	template <typename IPTYPE, typename EventIPTYPE>
 	void event(const EventIPTYPE& evt);
 
@@ -142,21 +138,5 @@ template<>
 inline auto& NetStat::listenPorts<ipv6_tuple_t>() {
 	return listen6_;
 }
-
-template <>
-inline auto& NetStat::servers<ipv4_tuple_t>() {
-	return servers_;
-}
-template <>
-inline auto& NetStat::servers<ipv6_tuple_t>() {
-	return servers6_;
-}
-
-class ConnectivityStats : public NetStat {
-public:
-	using NetStat::NetStat;
-protected:
-	void print_human_readable() override;
-};
 
 } // namespace netstat

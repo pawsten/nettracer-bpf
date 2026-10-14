@@ -180,6 +180,7 @@ bool NetStat::map_loop(const bpf::bpf_fds& fdsIPv4, const bpf::bpf_fds& fdsIPv6)
 		if (kbhit || outputCtr.time_elapsed()) {
 			resolveOldConnections<ipv4_tuple_t>();
 			resolveOldConnections<ipv6_tuple_t>();
+			aggregateServers();
 			const auto [passive, active, established] = countTcpSessions();
 			const auto tcpSessionsStr =
 					fmt::format("Number of passive tcp sessions: {}, active: {}, established: {}", passive, active, established);
@@ -263,27 +264,14 @@ void NetStat::event(const EventIPTYPE& evt) {
 		return;
 	}
 
-	key.dport = 0;
-	auto skey = createServerKey(key, evt.pid);
-	auto& serv = servers<IPTYPE>()[skey];
-	serv.update_time = getCurrentTimeFromSteadyClock();
-
 	if (evt.type == TCP_EVENT_TYPE_ACCEPT) {
 		el.state.Direction = 1;
 		el.state.Established = 1;
 		el.start = time;
-		serv.session_counter++;
 
 	} else if (evt.type == TCP_EVENT_TYPE_CLOSE) {
 		el.state.Closed = 1;
 		el.end = time;
-		serv.session_counter--;
-	} else if (evt.type == TCP_EVENT_TYPE_SYN_ATTEMPT) {
-		serv.connection_attempts++;
-	} else if (evt.type == TCP_EVENT_TYPE_RST) {
-		serv.connection_resets++;
-	} else if (evt.type == TCP_EVENT_TYPE_DROP) {
-		serv.connection_timeouts++;
 	}
 }
 
@@ -386,16 +374,9 @@ void print_human_readable(const std::unordered_map<IPTYPE, Connection>& aggr, in
 	}
 }
 
-template <typename IPTYPE>
-void print_human_readable2(
-		const std::unordered_map<ServerTuple_t<IPTYPE>, ServerStats>& aggr, int field_width, std::ostream& os) {
-
-	for (auto& [tup, stats] : aggr) {
-
-		os << std::setw(field_width) << to_string(tup.get_tuple(), ConnectionDirection::Incoming);
-		os << std::setw(field_width) << tup.pid << std::setw(field_width) << stats.bytes_sent << std::setw(field_width)
-		   << stats.bytes_received << std::setw(field_width) << stats.rtt << std::setw(field_width) << stats.connection_attempts <<"\n";
-	}
+void NetStat::print_human_readable_clients() {
+	print_human_readable<ipv4_tuple_t>(aggr_, 0, field_width, *os);
+	print_human_readable<ipv6_tuple_t>(aggr6_, 0, field_width, *os);
 }
 
 void NetStat::print_human_readable() {
@@ -403,17 +384,7 @@ void NetStat::print_human_readable() {
 	std::unique_lock<std::mutex> l(mx);
 	print_human_readable<ipv4_tuple_t>(aggr_, 1, field_width, *os);
 	print_human_readable<ipv6_tuple_t>(aggr6_, 1, field_width, *os);
-	print_human_readable<ipv4_tuple_t>(aggr_, 0, field_width, *os);
-	print_human_readable<ipv6_tuple_t>(aggr6_, 0, field_width, *os);
-}
-
-void ConnectivityStats::print_human_readable() {
-	printHeader(field_width, *os);
-	std::unique_lock<std::mutex> l(mx);
-	print_human_readable2<ipv4_tuple_t>(servers_, field_width, *os);
-	print_human_readable2<ipv6_tuple_t>(servers6_, field_width, *os);
-	print_human_readable<ipv4_tuple_t>(aggr_, 0, field_width, *os);
-	print_human_readable<ipv6_tuple_t>(aggr6_, 0, field_width, *os);
+	print_human_readable_clients();
 }
 
 template <typename IPTYPE>
@@ -516,25 +487,6 @@ void NetStat::on_config_change() {
 	exitCtrl.cv.notify_all();
 }
 
-template <typename IPTYPE>
 void NetStat::aggregateServers() {
-	auto& aggr{connections<IPTYPE>()};
-	for (auto& [tup, stats] : aggr) {
-		if (stats.state.Direction != 1) {
-			continue;
-		}
-		auto skey = createServerKey(tup, stats.pid);
-		auto& statsExt = servers<IPTYPE>()[skey];
-		statsExt.addStats(stats.curr);
-	}
 }
-
-template void NetStat::update<ipv4_tuple_t>(const bpf::bpf_fds&);
-template void NetStat::update<ipv6_tuple_t>(const bpf::bpf_fds&);
-template void NetStat::resolveOldConnections<ipv4_tuple_t>();
-template void NetStat::resolveOldConnections<ipv6_tuple_t>();
-template void NetStat::readListenPorts<ipv4_tuple_t>(const tcpTable<ipv4_tuple_t>&);
-template void NetStat::readListenPorts<ipv6_tuple_t>(const tcpTable<ipv6_tuple_t>&);
-template void NetStat::aggregateServers<ipv4_tuple_t>();
-template void NetStat::aggregateServers<ipv6_tuple_t>();
 } // namespace netstat

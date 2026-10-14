@@ -116,6 +116,7 @@ using ServerTuple_t = typename ServerTupleOf<T>::type;
 class ConnectivityStats : public NetStat {
 	ServersIPv4 servers_;
 	ServersIPv6 servers6_;
+	std::mutex mx_servers;
 	template <typename IPTYPE>
 	inline auto& servers();
 	template <typename IPTYPE, typename EventIPTYPE>
@@ -131,6 +132,7 @@ public:
 
 protected:
 	void print_human_readable() override;
+	void print_to_pipe() override;
 	void aggregateServers() override;
 };
 

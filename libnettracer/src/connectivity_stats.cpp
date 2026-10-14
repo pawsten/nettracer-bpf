@@ -39,21 +39,24 @@ static void printHeader(int field_width, std::ostream& os) {
 
 void ConnectivityStats::print_human_readable() {
 	printHeader(field_width, *os);
-	std::unique_lock<std::mutex> l(mx);
+	print_human_readable_clients();
+	std::unique_lock<std::mutex> l(mx_servers);
 	print_human_readable<ipv4_tuple_t>(servers_, field_width, *os);
 	print_human_readable<ipv6_tuple_t>(servers6_, field_width, *os);
-	print_human_readable_clients();
     servers_.clear();
 	servers6_.clear();
 }
 
+void ConnectivityStats::print_to_pipe() {
+
+}
+
 template <typename IPTYPE>
 void ConnectivityStats::aggregateServers() {
-	auto& aggr{connections<IPTYPE>()};
+	auto aggr = filterServerAggrs<IPTYPE>();
+	std::unique_lock<std::mutex> l(mx_servers);
+
 	for (auto& [tup, stats] : aggr) {
-		if (stats.state.Direction != 1) {
-			continue;
-		}
 		auto skey = createServerKey(tup, stats.pid);
 		auto& statsExt = servers<IPTYPE>()[skey];
 		statsExt.addStats(stats.curr);
@@ -69,7 +72,7 @@ template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
 	NetStat::event<IPTYPE>(evt);
 	auto key = createServerKey(eventToTuple(evt), evt.pid);
-	std::unique_lock<std::mutex> l(mx);
+	std::unique_lock<std::mutex> l(mx_servers);
 	auto& serv = servers<IPTYPE>()[key];
 	serv.update_time = getCurrentTimeFromSteadyClock();
 

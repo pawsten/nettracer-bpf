@@ -221,12 +221,12 @@ ReturnCodes startNetTracer(config_watcher& cw, config::Configuration& config) {
 	std::function<void(std::promise<bool>&&)> map_reading;
 
 	if (eventsOnly) {
-		ipv4_event_update = [&](const tcp_ipv4_event_t& evt) { netst->eventIpv4(evt); };
+		ipv4_event_update = [&netst](const tcp_ipv4_event_t& evt) { netst->eventIpv4(evt); };
 		if (monitorIPv6) {
-			ipv6_event_update = [&](const tcp_ipv6_event_t& evt) { netst->eventIpv6(evt); };
+			ipv6_event_update = [&netst](const tcp_ipv6_event_t& evt) { netst->eventIpv6(evt); };
 		}
 		bevents.set_config_change_observer(std::bind(&netstat::IStatsCollector::on_config_change, netst.get()));
-		map_reading = [&](std::promise<bool>&& promise) {
+		map_reading = [&netst](std::promise<bool>&& promise) {
 			auto ret = netst->map_loop();
 			promise.set_value(ret);
 		};

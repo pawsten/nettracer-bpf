@@ -115,7 +115,7 @@ protected:
 	void resolveOldConnections();
 	template <typename IPTYPE>
 	void set_prev_metrics();
-	virtual void aggregateServers();
+	virtual void aggregate();
 	template <typename IPTYPE, typename EventIPTYPE>
 	void event(const EventIPTYPE& evt);
 

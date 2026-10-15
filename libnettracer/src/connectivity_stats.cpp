@@ -41,7 +41,7 @@ static void printHeader(int field_width, std::ostream& os) {
 void ConnectivityStats::print_human_readable() {
 	printHeader(field_width, *os);
 	print_human_readable_clients();
-	std::unique_lock<std::mutex> l(mx_servers);
+	std::unique_lock l(mx_servers);
 	print_human_readable<ipv4_tuple_t>(servers_, field_width, *os);
 	print_human_readable<ipv6_tuple_t>(servers6_, field_width, *os);
     servers_.clear();
@@ -53,9 +53,9 @@ void ConnectivityStats::print_to_pipe() {
 }
 
 template <typename IPTYPE>
-void ConnectivityStats::aggregateServers() {
+void ConnectivityStats::aggregate() {
 	auto aggr = filterServerAggrs<IPTYPE>();
-	std::unique_lock<std::mutex> lock(mx_servers);
+	std::unique_lock lock(mx_servers);
 	for (auto& [tup, stats] : aggr) {
 		auto skey = createServerKey(tup, stats.pid);
 		auto& statsExt = servers<IPTYPE>()[skey];
@@ -65,9 +65,9 @@ void ConnectivityStats::aggregateServers() {
 	set_prev_metrics<IPTYPE>();
 }
 
-void ConnectivityStats::aggregateServers() {
-	aggregateServers<ipv4_tuple_t>();
-	aggregateServers<ipv6_tuple_t>();
+void ConnectivityStats::aggregate() {
+	aggregate<ipv4_tuple_t>();
+	aggregate<ipv6_tuple_t>();
 }
 
 template <typename IPTYPE>
@@ -85,7 +85,7 @@ template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
 	NetStat::event<IPTYPE>(evt);
 	auto key = createServerKey(eventToTuple(evt), evt.pid);
-	std::unique_lock<std::mutex> l(mx_servers);
+	std::unique_lock l(mx_servers);
 	auto& serv = servers<IPTYPE>()[key];
 	serv.update_time = getCurrentTimeFromSteadyClock();
 

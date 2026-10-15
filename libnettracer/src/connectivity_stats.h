@@ -127,7 +127,7 @@ class ConnectivityStats : public NetStat {
 	template <typename IPTYPE, typename EventIPTYPE>
 	void event(const EventIPTYPE& evt);
 	template <typename IPTYPE>
-	void aggregateServers();
+	void aggregate();
 	template <typename IPTYPE>
 	std::unordered_map<uint32_t, uint32_t>& getTcpConf(int& fd);
 
@@ -141,7 +141,7 @@ public:
 protected:
 	void print_human_readable() override;
 	void print_to_pipe() override;
-	void aggregateServers() override;
+	void aggregate() override;
 };
 
 template <>

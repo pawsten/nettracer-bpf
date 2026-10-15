@@ -27,4 +27,38 @@ struct Stats {
 	uint32_t rtt = 0;
 	uint32_t rtt_var = 0;
 };
+
+template <typename IPTYPE>
+Stats calc_delta(Stats curr, Stats prev, const IPTYPE& key) {
+	Stats result{};
+	if (curr.bytes_sent >= prev.bytes_sent) {
+		result.bytes_sent = curr.bytes_sent - prev.bytes_sent;
+	} else {
+		LOG_INFO("nonmonotonic counter bytes_sent : {} < {} key: {}", curr.bytes_sent, prev.bytes_sent, to_string(key));
+	}
+	if (curr.bytes_received >= prev.bytes_received) {
+		result.bytes_received = curr.bytes_received - prev.bytes_received;
+	} else {
+		LOG_INFO("nonmonotonic counter bytes_received : {} < {} key: {}", curr.bytes_received, prev.bytes_received, to_string(key));
+	}
+	if (curr.pkts_sent >= prev.pkts_sent) {
+		result.pkts_sent = curr.pkts_sent - curr.pkts_sent;
+	} else {
+		LOG_INFO("nonmonotonic counter pkts_sent : {} < {} key: {}", curr.pkts_sent, curr.pkts_received, to_string(key));
+	}
+	if (curr.pkts_received >= prev.pkts_received) {
+		result.pkts_received = curr.pkts_received - prev.pkts_received;
+	} else {
+		LOG_INFO("nonmonotonic counter pkts_received : {} < {} key: {}", curr.pkts_received, prev.pkts_received, to_string(key));
+	}
+	if (curr.pkts_retrans >= prev.pkts_retrans) {
+		result.pkts_retrans = curr.pkts_retrans - prev.pkts_retrans;
+	} else {
+		LOG_INFO("nonmonotonic counter pkts_received : {} < {} key: {}", curr.pkts_retrans, prev.pkts_retrans, to_string(key));
+	}
+	result.rtt = curr.rtt;
+	result.rtt_var = curr.rtt_var;
+	return result;
+}
+
 } // namespace netstat

@@ -54,13 +54,14 @@ void ConnectivityStats::print_to_pipe() {
 template <typename IPTYPE>
 void ConnectivityStats::aggregateServers() {
 	auto aggr = filterServerAggrs<IPTYPE>();
-	std::unique_lock<std::mutex> l(mx_servers);
-
+	std::unique_lock<std::mutex> lock(mx_servers);
 	for (auto& [tup, stats] : aggr) {
 		auto skey = createServerKey(tup, stats.pid);
 		auto& statsExt = servers<IPTYPE>()[skey];
-		statsExt.addStats(stats.curr);
+		statsExt.addStats(calc_delta(stats.curr, stats.prev, tup));
 	}
+	lock.unlock();
+	set_prev_metrics<IPTYPE>();
 }
 
 void ConnectivityStats::aggregateServers() {

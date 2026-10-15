@@ -258,7 +258,6 @@ void NetStat::event(const EventIPTYPE& evt) {
 		el.start = time;
 		el.state.Established = 1;
 		el.state.Direction = 0;
-
 		return;
 	}
 
@@ -266,7 +265,6 @@ void NetStat::event(const EventIPTYPE& evt) {
 		el.state.Direction = 1;
 		el.state.Established = 1;
 		el.start = time;
-
 	} else if (evt.type == TCP_EVENT_TYPE_CLOSE) {
 		el.state.Closed = 1;
 		el.end = time;
@@ -287,55 +285,52 @@ static std::ostream& operator<<(std::ostream& os, const netstat::State& s) {
 	return os;
 }
 
-template <typename IPTYPE>
-static uint64_t subtract(uint64_t a, uint64_t b, std::string_view position, const IPTYPE& key) {
-	uint64_t result = 0;
-	if (a >= b) {
-		result = a - b;
-	} else {
-		LOG_INFO("nonmonotonic counter {} : {} < {} key: {}", position, a, b, to_string(key));
-	}
-	return result;
-}
-
 void NetStat::flush() {
 	*os << " " << std::endl;
 	logging::getLogger()->flush();
 }
 
-static void set_prev_metrics(Connection& el) {
-	el.prev.bytes_received = el.curr.bytes_received;
-	el.prev.bytes_sent = el.curr.bytes_sent;
-	el.prev.pkts_retrans = el.curr.pkts_retrans;
-	el.prev.pkts_sent = el.curr.pkts_sent;
-	el.prev.pkts_received = el.curr.pkts_received;
+template <typename IPTYPE>
+void NetStat::set_prev_metrics() {
+	std::unique_lock<std::mutex> l(mx_aggr);
+	auto& aggr = connections<IPTYPE>();
+
+	for (auto& [tup, stats] : aggr) {
+		stats.prev.bytes_received = stats.curr.bytes_received;
+		stats.prev.bytes_sent = stats.curr.bytes_sent;
+		stats.prev.pkts_retrans = stats.curr.pkts_retrans;
+		stats.prev.pkts_sent = stats.curr.pkts_sent;
+		stats.prev.pkts_received = stats.curr.pkts_received;
+		stats.prev.rtt = stats.curr.rtt;
+		stats.prev.rtt_var = stats.curr.rtt_var;
+	}
 }
 
 template<typename IPTYPE>
-void NetStat::print() {
-	std::unique_lock<std::mutex> l(mx_aggr);
-	auto& aggr{connections<IPTYPE>()};
+void NetStat::print() const {
+	std::unique_lock<std::mutex> lock(mx_aggr);
+	const std::unordered_map<IPTYPE, Connection> aggr = connections<IPTYPE>();
+	lock.unlock();
 	std::stringstream buf;
 
 	for (auto it = aggr.begin(); it != aggr.end(); ++it) {
 
 		buf.str("");
 		auto wall_now = getCurrentTimeFromSystemClock();
-		uint64_t pkts_sent = subtract(it->second.curr.pkts_sent, (incremental ? it->second.prev.pkts_sent : 0), "pkts_sent", it->first);
-		uint64_t pkts_received = subtract(it->second.curr.pkts_received, (incremental ? it->second.prev.pkts_received : 0), "pkts_received", it->first);
+		Stats delta = (incremental) ? calc_delta(it->second.curr, it->second.prev, it->first) : it->second.curr;
 
 		buf << std::right
-			  << std::setw(12) << duration_cast<seconds>(wall_now.time_since_epoch()).count()
-			  << it->first
-			  << std::setw(12) << it->second.pid
-			  << std::setw(12) << it->first.netns << it->second.state
-			  << std::setw(22) << subtract( it->second.curr.bytes_sent, (incremental ? it->second.prev.bytes_sent : 0), "bytes_sent", it->first) + addAvgHeaderSize<IPTYPE>( pkts_sent, add_header_mode_)
-			  << std::setw(22) << subtract( it->second.curr.bytes_received, (incremental? it->second.prev.bytes_received: 0), "bytes_received", it->first) + addAvgHeaderSize<IPTYPE>( pkts_received, add_header_mode_ )
-		  	  << std::setw(22) << pkts_sent
-			  << std::setw(22) << pkts_received
-			  << std::setw(22) << subtract( it->second.curr.pkts_retrans, (incremental ? it->second.prev.pkts_retrans : 0), "retranmissions", it->first)
-			  << std::setw(12) << it->second.curr.rtt
-			  << std::setw(12) << it->second.curr.rtt_var;
+			<< std::setw(12) << duration_cast<seconds>(wall_now.time_since_epoch()).count()
+			<< it->first
+			<< std::setw(12) << it->second.pid
+			<< std::setw(12) << it->first.netns << it->second.state
+			<< std::setw(22) << delta.bytes_sent + addAvgHeaderSize<IPTYPE>( delta.pkts_sent, add_header_mode_)
+			<< std::setw(22) << delta.bytes_received + addAvgHeaderSize<IPTYPE>( delta.pkts_received, add_header_mode_ )
+		  	<< std::setw(22) << delta.pkts_sent
+			<< std::setw(22) << delta.pkts_received
+			<< std::setw(22) << delta.pkts_retrans
+			<< std::setw(12) << delta.rtt
+			<< std::setw(12) << delta.rtt_var;
 
 		if (it->second.state.Established) {
 			auto end = (it->second.end != system_clock::time_point{}) ? it->second.end : getCurrentTimeFromSystemClock();
@@ -346,7 +341,6 @@ void NetStat::print() {
 			LOG_WARN("Unknown server for {}", to_string(it->first));
 		}
 
-		set_prev_metrics(it->second);
 		*os << buf.str() << std::endl;
 		LOG_TRACE(buf.str());
 	}
@@ -355,6 +349,8 @@ void NetStat::print() {
 void NetStat::print_to_pipe() {
 	print<ipv4_tuple_t>();
 	print<ipv6_tuple_t>();
+	set_prev_metrics<ipv4_tuple_t>();
+	set_prev_metrics<ipv6_tuple_t>();
 }
 
 static void printHeader(int field_width, std::ostream& os) {

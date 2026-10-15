@@ -55,8 +55,7 @@ using IPv4ListenSock2Pid = std::unordered_multimap<ipv4_tuple_t, uint32_t>;
 using IPv6ListenSock2Pid = std::unordered_multimap<ipv6_tuple_t, uint32_t>;
 
 class NetStat : public IStatsCollector {
-	std::mutex mx_aggr;
-
+	mutable std::mutex mx_aggr;
 protected:
 	ConnectionsIPv4 aggr_;
 	ConnectionsIPv6 aggr6_;
@@ -75,7 +74,9 @@ protected:
 	bool filter_loopback;
 
 	template <typename IPTYPE>
-	inline auto& connections(); // no default instantiation
+	inline auto& connections() const;
+	template <typename IPTYPE>
+	inline auto& connections();
 	template <typename IPTYPE>
 	inline auto& listenPorts();
 	template <typename IPTYPE>
@@ -94,7 +95,7 @@ protected:
 
 	virtual void print_to_pipe();
 	template <typename IPTYPE>
-	void print();
+	void print() const ;
 	virtual void print_human_readable();
 	void print_human_readable_clients();
 	void flush();
@@ -109,6 +110,8 @@ protected:
 
 	template <typename IPTYPE>
 	void resolveOldConnections();
+	template <typename IPTYPE>
+	void set_prev_metrics();
 	virtual void aggregateServers();
 	template <typename IPTYPE, typename EventIPTYPE>
 	void event(const EventIPTYPE& evt);
@@ -126,6 +129,14 @@ public:
 };
 
 template <>
+inline auto& NetStat::connections<ipv4_tuple_t>() const {
+	return aggr_;
+}
+template <>
+inline auto& NetStat::connections<ipv6_tuple_t>() const {
+	return aggr6_;
+}
+template <>
 inline auto& NetStat::connections<ipv4_tuple_t>() {
 	return aggr_;
 }
@@ -133,7 +144,6 @@ template <>
 inline auto& NetStat::connections<ipv6_tuple_t>() {
 	return aggr6_;
 }
-
 template <>
 inline auto& NetStat::listenPorts<ipv4_tuple_t>() {
 	return listen_;

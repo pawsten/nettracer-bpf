@@ -56,6 +56,9 @@ using IPv6ListenSock2Pid = std::unordered_multimap<ipv6_tuple_t, uint32_t>;
 
 class NetStat : public IStatsCollector {
 	mutable std::mutex mx_aggr;
+	bpf::bpf_fds fdsIPv4;
+	bpf::bpf_fds fdsIPv6;
+
 protected:
 	ConnectionsIPv4 aggr_;
 	ConnectionsIPv6 aggr6_;
@@ -122,8 +125,8 @@ public:
 	void set_kbhit() override;
 	void set_max_map_size(uint32_t size) override;
 	void on_config_change() override;
-	void init() override;
-	bool map_loop(const bpf::bpf_fds& fdsIPv4, const bpf::bpf_fds& fdsIPv6) override;
+	void init(bpf::Ibpf& ebpf) override;
+	bool map_loop() override;
 	void eventIpv4(const tcp_ipv4_event_t& evt) override;
 	void eventIpv6(const tcp_ipv6_event_t& evt) override;
 };

@@ -164,7 +164,7 @@ std::tuple<unsigned, unsigned, unsigned> NetStat::countTcpSessions() {
 	return {incoming, container4.size() + container6.size() - incoming, established};
 }
 
-bool NetStat::map_loop(const bpf::bpf_fds& fdsIPv4, const bpf::bpf_fds& fdsIPv6) {
+bool NetStat::map_loop() {
 	using namespace std::literals::chrono_literals;
 
 	TimeGuard outputCtr(exitCtrl.wait_time), logCtr(seconds(5min).count());
@@ -438,10 +438,20 @@ void NetStat::resolveOldConnections() {
 	}
 }
 
-void NetStat::init() {
+void NetStat::init(bpf::Ibpf& ebpf) {
 	// wrapper just wraps syscalls so using it is thread-safe
 	static bpf::BPFMapsWrapper wrapper;
 	mapsWrapper = &wrapper;
+
+	fdsIPv4 = getIPv4Fds(ebpf);
+	if (fdsIPv4.isInvalid()) {
+		throw std::invalid_argument("invalid fds for ipv4 maps");
+	}
+
+	fdsIPv6 = getIPv6Fds(ebpf);
+	if (fdsIPv6.isInvalid()) {
+		throw std::invalid_argument("invalid fds for ipv6 maps");
+	}
 
 	readListenPorts();
 }

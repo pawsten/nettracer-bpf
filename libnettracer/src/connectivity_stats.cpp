@@ -15,6 +15,7 @@
  */
 
 #include "connectivity_stats.h"
+#include "bpf_generic/src/bpf_interface.h"
 #include "system_utils.h"
 
 namespace netstat {
@@ -69,6 +70,17 @@ void ConnectivityStats::aggregateServers() {
 	aggregateServers<ipv6_tuple_t>();
 }
 
+template <typename IPTYPE>
+std::unordered_map<uint32_t, uint32_t>& ConnectivityStats::getTcpConf(int& fd) {
+	if constexpr (std::is_same_v<IPTYPE, ipv4_tuple_t>) {
+		fd = tcp_params_fd;
+		return syn_backlog_conf;
+	}
+
+	fd = tcp6_params_fd;
+	return syn_backlog_conf6;
+}
+
 template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
 	NetStat::event<IPTYPE>(evt);
@@ -78,18 +90,50 @@ void ConnectivityStats::event(const EventIPTYPE& evt) {
 	serv.update_time = getCurrentTimeFromSteadyClock();
 
 	if (evt.type == TCP_EVENT_TYPE_SYN_ATTEMPT) {
-		serv.connection_attempts++;
+		serv.connection_attempts++;;
+		tcp_params_t val{};
+        int fd;
+		auto& conf = getTcpConf<IPTYPE>(fd);
+		auto it = conf.find(evt.netns);
+		if (it == conf.end()) {
+			if (mapsWrapper->lookupElement(fd, &evt.netns, &val)) {
+				conf[evt.netns] = val.syn_queue_size;
+				LOG_INFO("Namespace {} max_syn_queuelen: {}", evt.netns, val.syn_queue_size);
+			}
+		} else {
+			val.syn_queue_size = it->second;
+		}
+
+		if (val.syn_queue_size > 0 && evt.synqueuelen >= val.syn_queue_size) {
+			serv.connection_timeouts++;
+		}
 	} else if (evt.type == TCP_EVENT_TYPE_RST) {
 		serv.connection_resets++;
 	} else if (evt.type == TCP_EVENT_TYPE_DROP) {
-		serv.connection_timeouts++;
+		serv.connection_timeouts++; //we accounts drops as timeouts
 	}
 }
 
 void ConnectivityStats::eventIpv4(const tcp_ipv4_event_t& evt) {
 	return event<ipv4_tuple_t>(evt);
 }
+
 void ConnectivityStats::eventIpv6(const tcp_ipv6_event_t& evt) {
 	return event<ipv6_tuple_t>(evt);
 }
+
+void ConnectivityStats::init(bpf::Ibpf& ebpf) {
+	NetStat::init(ebpf);
+
+	tcp_params_fd = ebpf.get_map_fd("tcp_params");
+	if (tcp_params_fd < 0) {
+		throw std::invalid_argument("invalid tcp_params_fd");
+	}
+
+	tcp6_params_fd = ebpf.get_map_fd("tcp6_params");
+	if (tcp6_params_fd < 0) {
+		throw std::invalid_argument("invalid tcp6_params_fd");
+	}
+}
+
 } // namespace netstat

@@ -223,45 +223,55 @@ void NetStat::clean() {
 }
 
 template<typename IPTYPE, typename EventIPTYPE>
-void NetStat::event(const EventIPTYPE& evt) {
+bool NetStat::event(const EventIPTYPE& evt) {
 	auto key{eventToTuple(evt)};
 	auto time = bpfTimeToSystemTime(evt.timestamp);
 
 	if (key.sport == 0) {
 		LOG_DEBUG("Event src port = 0 for {} ", to_string(evt));
-		return;
+		return true;
 	}
 
-	std::unique_lock lock(mx_aggr);
-	auto& el = connections<IPTYPE>()[key];
 
-	if (el.state.Closed == 1) {
-		LOG_INFO("Event on closed connection {}", to_string(evt));
-	}
-	el.pid = evt.pid;
-	el.update_time = getCurrentTimeFromSteadyClock();
 	if (evt.type == TCP_EVENT_TYPE_CONNECT) {
+		std::unique_lock lock(mx_aggr);
+		auto& el = connections<IPTYPE>()[key];
+		el.pid = evt.pid;
+		el.update_time = getCurrentTimeFromSteadyClock();
 		el.start = time;
 		el.state.Established = 1;
 		el.state.Direction = 0;
-		return;
+		return true;
 	}
 
 	if (evt.type == TCP_EVENT_TYPE_ACCEPT) {
+		std::unique_lock lock(mx_aggr);
+		auto& el = connections<IPTYPE>()[key];
+		el.pid = evt.pid;
+		el.update_time = getCurrentTimeFromSteadyClock();
 		el.state.Direction = 1;
 		el.state.Established = 1;
 		el.start = time;
-	} else if (evt.type == TCP_EVENT_TYPE_CLOSE) {
+		return true;
+	}
+	if (evt.type == TCP_EVENT_TYPE_CLOSE) {
+		std::unique_lock lock(mx_aggr);
+		auto& el = connections<IPTYPE>()[key];
+		el.pid = evt.pid;
+		el.update_time = getCurrentTimeFromSteadyClock();
 		el.state.Closed = 1;
 		el.end = time;
+		return true;
 	}
+
+	return false;
 }
 
 void NetStat::eventIpv4(const tcp_ipv4_event_t& evt) {
-	return event<ipv4_tuple_t>(evt);
+	return static_cast<void>(event<ipv4_tuple_t>(evt));
 }
 void NetStat::eventIpv6(const tcp_ipv6_event_t& evt) {
-	return event<ipv6_tuple_t>(evt);
+	return static_cast<void>(event<ipv6_tuple_t>(evt));
 }
 
 void NetStat::flush() {
@@ -294,7 +304,7 @@ void NetStat::print(bool clientsOnly) const {
 
 	for (auto it = aggr.begin(); it != aggr.end(); ++it) {
 
-		if (clientsOnly && !it->second.state.Direction) {
+		if (clientsOnly && it->second.state.Direction) {
 			continue;
 		}
 
@@ -370,6 +380,9 @@ void NetStat::print_human_readable() {
 	std::unique_lock lock(mx_aggr);
 	print_human_readable<ipv4_tuple_t>(aggr_, 1, field_width, *os);
 	print_human_readable<ipv6_tuple_t>(aggr6_, 1, field_width, *os);
+	lock.unlock();
+	set_prev_metrics<ipv4_tuple_t>();
+	set_prev_metrics<ipv6_tuple_t>();
 }
 
 template <typename IPTYPE>
@@ -488,12 +501,12 @@ template <typename IPTYPE>
 std::unordered_map<IPTYPE, Connection> NetStat::filterServerAggrs() {
 	std::unordered_map<IPTYPE, Connection> result;
 	std::unique_lock lock(mx_aggr);
-	auto aggr = connections<IPTYPE>();
+	auto& aggr = connections<IPTYPE>();
 	for (auto& [tup, stats] : aggr) {
 		if (stats.state.Direction != 1) {
 			continue;
 		}
-		result.insert({tup, stats});
+		result.emplace(tup, stats);
 	}
 
 	return result;

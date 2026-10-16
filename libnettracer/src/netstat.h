@@ -110,7 +110,7 @@ protected:
 	void set_prev_metrics();
 	virtual void aggregate();
 	template <typename IPTYPE, typename EventIPTYPE>
-	void event(const EventIPTYPE& evt);
+	bool event(const EventIPTYPE& evt);
 
 public:
 	explicit NetStat(config::ExitCtrl& e, bool deltaMode, bool headerMode, bool nonInteractive, bool filterLoopback = true);

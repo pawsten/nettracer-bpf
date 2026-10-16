@@ -15,6 +15,7 @@
 */
 #include "tuple_utils.h"
 #include "proc_tcp.h"
+#include "stats.h"
 #include <arpa/inet.h>
 #include <fmt/core.h>
 #include <functional>
@@ -215,7 +216,7 @@ std::ostream& operator<<(std::ostream& os, const ipv6_tuple_t& tup) {
 	return os;
 }
 
-std::string short_num(uint32_t v) {
+std::string short_num(uint64_t v) {
 	if (v < 1000)
 		return fmt::format("{}", v);
 	if (v < 1'000'000)

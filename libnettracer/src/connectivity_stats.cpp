@@ -41,18 +41,33 @@ static void printHeader(int field_width, std::ostream& os) {
 void ConnectivityStats::print_human_readable() {
 	printHeader(field_width, *os);
 	print_human_readable_clients();
-	std::unique_lock l(mx_servers);
-	print_human_readable<ipv4_tuple_t>(servers_, field_width, *os);
-	print_human_readable<ipv6_tuple_t>(servers6_, field_width, *os);
-    servers_.clear();
-	servers6_.clear();
+	ServersIPv4 s4;
+	ServersIPv6 s6;
+	{
+		std::unique_lock l(mx_servers);
+		s4.swap(servers_);
+		s6.swap(servers6_);
+	}
+	print_human_readable<ipv4_tuple_t>(s4, field_width, *os);
+	print_human_readable<ipv6_tuple_t>(s6, field_width, *os);
+	set_prev_metrics<ipv4_tuple_t>();
+	set_prev_metrics<ipv6_tuple_t>();
 }
 
 void ConnectivityStats::print_to_pipe() {
 	NetStat::print<ipv4_tuple_t>(true);
 	NetStat::print<ipv6_tuple_t>(true);
-	print<ipv4_tuple_t>();
-	print<ipv6_tuple_t>();
+	ServersIPv4 s4;
+	ServersIPv6 s6;
+	{
+		std::unique_lock l(mx_servers);
+		s4.swap(servers_);
+		s6.swap(servers6_);
+	}
+	print<ipv4_tuple_t>(s4);
+	print<ipv6_tuple_t>(s6);
+	set_prev_metrics<ipv4_tuple_t>();
+	set_prev_metrics<ipv6_tuple_t>();
 }
 
 template <typename IPTYPE>
@@ -64,8 +79,6 @@ void ConnectivityStats::aggregate() {
 		auto& statsExt = servers<IPTYPE>()[skey];
 		statsExt.addStats(calc_delta(stats.curr, stats.prev, tup));
 	}
-	lock.unlock();
-	set_prev_metrics<IPTYPE>();
 }
 
 void ConnectivityStats::aggregate() {
@@ -86,14 +99,16 @@ std::unordered_map<uint32_t, uint32_t>& ConnectivityStats::getTcpConf(int& fd) {
 
 template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
-	NetStat::event<IPTYPE>(evt);
+	if(NetStat::event<IPTYPE>(evt)){
+		return;
+	}
 	auto key = createServerKey(eventToTuple(evt), evt.pid);
 	std::unique_lock lock(mx_servers);
 	auto& serv = servers<IPTYPE>()[key];
 	serv.update_time = getCurrentTimeFromSteadyClock();
 
 	if (evt.type == TCP_EVENT_TYPE_SYN_ATTEMPT) {
-		serv.connection_attempts++;;
+		serv.connection_attempts++;
 		tcp_params_t val{};
         int fd;
 		auto& conf = getTcpConf<IPTYPE>(fd);
@@ -140,14 +155,12 @@ void ConnectivityStats::init(bpf::Ibpf& ebpf) {
 }
 
 template <typename IPTYPE>
-void ConnectivityStats::print() const {
-	std::unique_lock lock(mx_servers);
-	auto& serv = servers<IPTYPE>();
+void ConnectivityStats::print(const std::unordered_map<ServerTuple_t<IPTYPE>, ServerStats>& aggr)  const {
 	std::stringstream buf;
 	State  kind{};
 	kind.Aggregated = 1;
 
-	for (const auto& [sock, stat] : serv) {
+	for (const auto& [sock, stat] : aggr) {
 
 		buf.str("");
 		auto wall_now = getCurrentTimeFromSystemClock();

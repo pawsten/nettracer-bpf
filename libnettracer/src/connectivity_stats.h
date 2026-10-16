@@ -50,10 +50,10 @@ template <>
 struct std::hash<netstat::server_ipv4_tuple_t> {
 	std::size_t operator()(const netstat::server_ipv4_tuple_t& t) const noexcept {
 		std::size_t h = 0;
-		hash_combine(h, std::hash<uint32_t>{}(t.saddr));
-		hash_combine(h, std::hash<uint32_t>{}(t.daddr));
-		hash_combine(h, std::hash<uint16_t>{}(t.sport));
-		hash_combine(h, std::hash<uint32_t>{}(t.pid));
+		boost::hash_combine(h, t.saddr);
+		boost::hash_combine(h, t.daddr);
+		boost::hash_combine(h, t.sport);
+		boost::hash_combine(h, t.pid);
 		return h;
 	}
 };
@@ -62,12 +62,12 @@ template <>
 struct std::hash<netstat::server_ipv6_tuple_t> {
 	std::size_t operator()(const netstat::server_ipv6_tuple_t& t) const noexcept {
 		std::size_t h = 0;
-		hash_combine(h, std::hash<uint64_t>{}(t.saddr_h));
-		hash_combine(h, std::hash<uint64_t>{}(t.saddr_l));
-		hash_combine(h, std::hash<uint64_t>{}(t.daddr_h));
-		hash_combine(h, std::hash<uint64_t>{}(t.daddr_l));
-		hash_combine(h, std::hash<uint16_t>{}(t.sport));
-		hash_combine(h, std::hash<uint32_t>{}(t.pid));
+		boost::hash_combine(h, t.saddr_h);
+		boost::hash_combine(h, t.saddr_l);
+		boost::hash_combine(h, t.daddr_h);
+		boost::hash_combine(h, t.daddr_l);
+		boost::hash_combine(h, t.sport);
+		boost::hash_combine(h, t.pid);
 		return h;
 	}
 };
@@ -134,7 +134,7 @@ class ConnectivityStats : public NetStat {
 	template <typename IPTYPE>
 	std::unordered_map<uint32_t, uint32_t>& getTcpConf(int& fd);
 	template <typename IPTYPE>
-	void print() const;
+	void print(const std::unordered_map<ServerTuple_t<IPTYPE>, ServerStats>& aggr) const;
 
 public:
 	using NetStat::NetStat;

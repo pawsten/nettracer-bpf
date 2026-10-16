@@ -29,20 +29,6 @@ namespace netstat {
 constexpr auto INACTIVE_TIMEOUT = minutes(1);
 constexpr unsigned INTERVAL_DIVIDER = 10;
 
-template <class IPTYPE>
-constexpr uint64_t addAvgHeaderSize(uint64_t pkts, bool count) {
-	return 0;
-}
-
-template <>
-constexpr uint64_t addAvgHeaderSize<ipv4_tuple_t>(uint64_t pkts, bool count) {
-	return count ? 66 * pkts : 0;
-}
-
-template <>
-constexpr uint64_t addAvgHeaderSize<ipv6_tuple_t>(uint64_t pkts, bool count) {
-	return count ? 77 * pkts : 0;
-}
 
 static int getWindowWidth() {
 	winsize sz{};
@@ -278,13 +264,6 @@ void NetStat::eventIpv6(const tcp_ipv6_event_t& evt) {
 	return event<ipv6_tuple_t>(evt);
 }
 
-#define PRINT_BIT(field) ((s.field) ? "1" : "0")
-
-static std::ostream& operator<<(std::ostream& os, const netstat::State& s) {
-	os << " " << PRINT_BIT(Established) << PRINT_BIT(Direction) << PRINT_BIT(Closed) << " ";
-	return os;
-}
-
 void NetStat::flush() {
 	*os << " " << std::endl;
 	logging::getLogger()->flush();
@@ -306,8 +285,8 @@ void NetStat::set_prev_metrics() {
 	}
 }
 
-template<typename IPTYPE>
-void NetStat::print() const {
+template <typename IPTYPE>
+void NetStat::print(bool clientsOnly) const {
 	std::unique_lock lock(mx_aggr);
 	const std::unordered_map<IPTYPE, Connection> aggr = connections<IPTYPE>();
 	lock.unlock();
@@ -315,9 +294,13 @@ void NetStat::print() const {
 
 	for (auto it = aggr.begin(); it != aggr.end(); ++it) {
 
+		if (clientsOnly && !it->second.state.Direction) {
+			continue;
+		}
+
 		buf.str("");
 		auto wall_now = getCurrentTimeFromSystemClock();
-		Stats delta = (incremental) ? calc_delta(it->second.curr, it->second.prev, it->first) : it->second.curr;
+		Stats delta = incremental ? calc_delta(it->second.curr, it->second.prev, it->first) : it->second.curr;
 
 		buf << std::right
 			<< std::setw(12) << duration_cast<seconds>(wall_now.time_since_epoch()).count()
@@ -347,8 +330,8 @@ void NetStat::print() const {
 }
 
 void NetStat::print_to_pipe() {
-	print<ipv4_tuple_t>();
-	print<ipv6_tuple_t>();
+	print<ipv4_tuple_t>(false);
+	print<ipv6_tuple_t>(false);
 	set_prev_metrics<ipv4_tuple_t>();
 	set_prev_metrics<ipv6_tuple_t>();
 }

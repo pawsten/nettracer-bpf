@@ -49,7 +49,10 @@ void ConnectivityStats::print_human_readable() {
 }
 
 void ConnectivityStats::print_to_pipe() {
-
+	NetStat::print<ipv4_tuple_t>(true);
+	NetStat::print<ipv6_tuple_t>(true);
+	print<ipv4_tuple_t>();
+	print<ipv6_tuple_t>();
 }
 
 template <typename IPTYPE>
@@ -85,7 +88,7 @@ template <typename IPTYPE, typename EventIPTYPE>
 void ConnectivityStats::event(const EventIPTYPE& evt) {
 	NetStat::event<IPTYPE>(evt);
 	auto key = createServerKey(eventToTuple(evt), evt.pid);
-	std::unique_lock l(mx_servers);
+	std::unique_lock lock(mx_servers);
 	auto& serv = servers<IPTYPE>()[key];
 	serv.update_time = getCurrentTimeFromSteadyClock();
 
@@ -133,6 +136,32 @@ void ConnectivityStats::init(bpf::Ibpf& ebpf) {
 	tcp6_params_fd = ebpf.get_map_fd("tcp6_params");
 	if (tcp6_params_fd < 0) {
 		throw std::invalid_argument("invalid tcp6_params_fd");
+	}
+}
+
+template <typename IPTYPE>
+void ConnectivityStats::print() const {
+	std::unique_lock lock(mx_servers);
+	auto& serv = servers<IPTYPE>();
+	std::stringstream buf;
+	State  kind{};
+	kind.Aggregated = 1;
+
+	for (const auto& [sock, stat] : serv) {
+
+		buf.str("");
+		auto wall_now = getCurrentTimeFromSystemClock();
+		const ServerStats& delta = stat;
+
+		buf << std::right << std::setw(12) << duration_cast<seconds>(wall_now.time_since_epoch()).count() << sock.get_tuple()
+			<< std::setw(12) << sock.pid << std::setw(12) << sock.netns << kind << std::setw(22)
+			<< delta.bytes_sent + addAvgHeaderSize<IPTYPE>(delta.pkts_sent, add_header_mode_) << std::setw(22)
+			<< delta.bytes_received + addAvgHeaderSize<IPTYPE>(delta.pkts_received, add_header_mode_) << std::setw(22) << delta.pkts_sent
+			<< std::setw(22) << delta.pkts_received << std::setw(22) << delta.pkts_retrans << std::setw(12) << delta.rtt << std::setw(12)
+			<< delta.connection_attempts << std::setw(12) << delta.connection_timeouts << std::setw(12) << delta.connection_resets;
+
+		*os << buf.str() << std::endl;
+		LOG_TRACE(buf.str());
 	}
 }
 

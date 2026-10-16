@@ -18,6 +18,13 @@
 
 namespace netstat {
 
+struct State {
+	unsigned char Established : 1;
+	unsigned char Direction : 1;
+	unsigned char Closed : 1;
+	unsigned char Aggregated : 1;
+};
+
 struct Stats {
 	uint64_t bytes_sent = 0;
 	uint64_t bytes_received = 0;

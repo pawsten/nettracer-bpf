@@ -224,3 +224,10 @@ std::string short_num(uint32_t v) {
 		return fmt::format("{:.1f}M", v / 1e6);
 	return fmt::format("{:.1f}G", v / 1e9);
 }
+
+#define PRINT_BIT(field) ((s.field) ? "1" : "0")
+
+std::ostream& operator<<(std::ostream& os, const netstat::State& s) {
+	os << " " << PRINT_BIT(Established) << PRINT_BIT(Direction) << PRINT_BIT(Closed) << PRINT_BIT(Aggregated) << " ";
+	return os;
+}

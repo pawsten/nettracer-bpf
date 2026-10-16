@@ -105,6 +105,7 @@ template <>
 struct ServerTupleOf<ipv4_tuple_t> {
 	using type = server_ipv4_tuple_t;
 };
+
 template <>
 struct ServerTupleOf<ipv6_tuple_t> {
 	using type = server_ipv6_tuple_t;
@@ -116,7 +117,7 @@ using ServerTuple_t = typename ServerTupleOf<T>::type;
 class ConnectivityStats : public NetStat {
 	ServersIPv4 servers_;
 	ServersIPv6 servers6_;
-	std::mutex mx_servers;
+	mutable std::mutex mx_servers;
 	int tcp_params_fd{-1};
 	int tcp6_params_fd{-1};
 	std::unordered_map<uint32_t, uint32_t> syn_backlog_conf;
@@ -124,12 +125,16 @@ class ConnectivityStats : public NetStat {
 
 	template <typename IPTYPE>
 	inline auto& servers();
+	template <typename IPTYPE>
+	inline auto& servers() const;
 	template <typename IPTYPE, typename EventIPTYPE>
 	void event(const EventIPTYPE& evt);
 	template <typename IPTYPE>
 	void aggregate();
 	template <typename IPTYPE>
 	std::unordered_map<uint32_t, uint32_t>& getTcpConf(int& fd);
+	template <typename IPTYPE>
+	void print() const;
 
 public:
 	using NetStat::NetStat;
@@ -150,6 +155,14 @@ inline auto& ConnectivityStats::servers<ipv4_tuple_t>() {
 }
 template <>
 inline auto& ConnectivityStats::servers<ipv6_tuple_t>() {
+	return servers6_;
+}
+template <>
+inline auto& ConnectivityStats::servers<ipv4_tuple_t>() const {
+	return servers_;
+}
+template <>
+inline auto& ConnectivityStats::servers<ipv6_tuple_t>() const {
 	return servers6_;
 }
 } // namespace netstat

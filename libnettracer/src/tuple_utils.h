@@ -17,7 +17,7 @@
 
 #include "bpf_program/nettracer-bpf.h"
 #include "proc_tcp.h"
-
+#include "stats.h"
 #include <array>
 #include <string>
 #include <tuple>
@@ -102,3 +102,5 @@ bool shouldFilter(const ipv4_tuple_t key);
 bool shouldFilter(const ipv6_tuple_t key);
 bool isIpv4MappedIpv6(uint64_t addr_l, uint64_t addr_h);
 ipv4_tuple_t convertMappedIpv6Tuple(const ipv6_tuple_t ipv6);
+
+std::ostream& operator<<(std::ostream& os, const netstat::State& s);
